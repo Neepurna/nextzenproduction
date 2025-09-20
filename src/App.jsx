@@ -77,11 +77,12 @@ function App() {
     <Box
       sx={{
         width: '100vw',
-        height: '100vh',
+        minHeight: '100vh',
+        height: { xs: 'auto', md: '100vh' },
         display: 'flex',
         margin: 0,
         padding: 0,
-        overflow: 'hidden',
+        overflow: { xs: 'auto', md: 'hidden' },
         position: 'relative',
         backgroundColor: '#0a1a1a',
       }}
@@ -118,43 +119,60 @@ function App() {
           left: 0,
           right: 0,
           zIndex: 10,
-          p: 3,
+          p: { xs: 2, md: 3 },
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
         }}
       >
         {/* Left Navigation */}
-        <Box sx={{ display: 'flex', gap: 4 }}>
+        <Box sx={{ 
+          display: { xs: 'none', md: 'flex' }, 
+          gap: 4 
+        }}>
           <Typography sx={{ color: 'white', fontSize: '14px', cursor: 'pointer' }}>ABOUT</Typography>
           <Typography sx={{ color: 'white', fontSize: '14px', cursor: 'pointer' }}>VIDEOS</Typography>
           <Typography sx={{ color: 'white', fontSize: '14px', cursor: 'pointer' }}>FEATURED</Typography>
           <Typography sx={{ color: 'white', fontSize: '14px', cursor: 'pointer' }}>GALLERY</Typography>
         </Box>
+        
+        {/* Mobile Menu Button */}
+        <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+          <Typography sx={{ color: 'white', fontSize: '14px', cursor: 'pointer' }}>☰ MENU</Typography>
+        </Box>
       </Box>
 
       {/* Main Content */}
-      <Box sx={{ height: '100%', position: 'relative', zIndex: 5, width: '100%', display: 'flex' }}>
+      <Box sx={{ 
+        height: '100%', 
+        position: 'relative', 
+        zIndex: 5, 
+        width: '100%', 
+        display: 'flex',
+        flexDirection: { xs: 'column', md: 'row' }
+      }}>
         {/* Left Content */}
         <Box
           sx={{
-            width: '70%',
-            height: '100%',
+            width: { xs: '100%', md: '70%' },
+            height: { xs: 'auto', md: '100%' },
+            minHeight: { xs: '70vh', md: 'auto' },
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'flex-start',
-            pt: '25vh',
-            pl: { xs: 3, md: 6 },
-            pr: { xs: 3, md: 4 },
+            justifyContent: { xs: 'center', md: 'flex-start' },
+            pt: { xs: '20vh', md: '25vh' },
+            pl: { xs: 2, md: 6 },
+            pr: { xs: 2, md: 4 },
+            pb: { xs: 4, md: 0 },
           }}
         >
           {/* Next Zen Productions Presents */}
           <Typography
             sx={{
               color: '#00ff88',
-              fontSize: '12px',
+              fontSize: { xs: '10px', md: '12px' },
               fontWeight: 600,
-              mb: 2,
+              mb: { xs: 1, md: 2 },
               letterSpacing: '2px',
               textTransform: 'uppercase',
             }}
@@ -166,12 +184,12 @@ function App() {
           <Typography
             variant="h1"
             sx={{
-              fontSize: { xs: '2.8rem', md: '5.6rem' },
+              fontSize: { xs: '2.5rem', sm: '3.5rem', md: '5.6rem' },
               fontWeight: 900,
               color: 'white',
               fontFamily: '"Bebas Neue", sans-serif',
               lineHeight: 0.9,
-              mb: 3,
+              mb: { xs: 2, md: 3 },
               textShadow: '3px 3px 6px rgba(0,0,0,0.7)',
             }}
           >
@@ -182,10 +200,10 @@ function App() {
           <Typography
             sx={{
               color: 'rgba(255,255,255,0.9)',
-              fontSize: '16px',
+              fontSize: { xs: '14px', md: '16px' },
               lineHeight: 1.6,
-              mb: 4,
-              maxWidth: '500px',
+              mb: { xs: 3, md: 4 },
+              maxWidth: { xs: '100%', md: '500px' },
               fontFamily: 'Roboto, sans-serif',
             }}
           >              Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
@@ -217,52 +235,55 @@ function App() {
           </Button>
         </Box>
 
-        {/* Right Sidebar - Absolutely positioned */}
+        {/* Right Sidebar - Responsive positioning */}
         <Box
           sx={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            width: '30%',
-            height: '100%',
+            position: { xs: 'relative', md: 'absolute' },
+            top: { xs: 'auto', md: 0 },
+            right: { xs: 'auto', md: 0 },
+            width: { xs: '100%', md: '30%' },
+            height: { xs: 'auto', md: '100%' },
             backgroundColor: 'rgba(0,20,20,0.95)',
-            p: 4,
+            p: { xs: 3, md: 4 },
             display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
+            flexDirection: { xs: 'row', md: 'column' },
+            justifyContent: { xs: 'space-between', md: 'space-between' },
             textAlign: 'left',
             zIndex: 6,
+            gap: { xs: 3, md: 0 },
           }}
         >
             {/* Top Section */}
-            <Box>
+            <Box sx={{ flex: { xs: 1, md: 'none' } }}>
               {/* Premiere Date */}
-              <Typography sx={{ color: 'white', fontSize: '12px', mb: 0.5 }}>PREMIERE</Typography>
-              <Typography sx={{ color: 'white', fontSize: '16px', fontWeight: 500, mb: 3 }}>4 October 2019</Typography>
+              <Typography sx={{ color: 'white', fontSize: { xs: '10px', md: '12px' }, mb: 0.5 }}>PREMIERE</Typography>
+              <Typography sx={{ color: 'white', fontSize: { xs: '14px', md: '16px' }, fontWeight: 500, mb: { xs: 2, md: 3 } }}>4 October 2019</Typography>
 
               {/* Director */}
-              <Typography sx={{ color: 'white', fontSize: '12px', mb: 0.5 }}>DIRECTOR</Typography>
-              <Typography sx={{ color: 'white', fontSize: '16px', fontWeight: 500, mb: 3 }}>Himal Neupane</Typography>
+              <Typography sx={{ color: 'white', fontSize: { xs: '10px', md: '12px' }, mb: 0.5 }}>DIRECTOR</Typography>
+              <Typography sx={{ color: 'white', fontSize: { xs: '14px', md: '16px' }, fontWeight: 500, mb: { xs: 2, md: 3 } }}>Himal Neupane</Typography>
 
-              {/* Starring */}
-              <Typography sx={{ color: 'white', fontSize: '12px', mb: 0.5 }}>STARRING</Typography>
-              <Typography sx={{ color: 'white', fontSize: '16px', fontWeight: 500, mb: 3 }}>Bijay Baral, Keki Adhikari, Mrunal Thakur</Typography>
+              {/* Starring - Hide on mobile */}
+              <Box sx={{ display: { xs: 'none', sm: 'block' } }}>
+                <Typography sx={{ color: 'white', fontSize: '12px', mb: 0.5 }}>STARRING</Typography>
+                <Typography sx={{ color: 'white', fontSize: '16px', fontWeight: 500, mb: 3 }}>Bijay Baral, Keki Adhikari, Mrunal Thakur</Typography>
+              </Box>
 
               {/* Genre */}
-              <Typography sx={{ color: 'white', fontSize: '12px', mb: 1 }}>GENRE</Typography>
-              <Box sx={{ display: 'flex', gap: 1, mb: 4 }}>
-                <Chip label="Family Drama" size="small" sx={{ backgroundColor: 'rgba(255,255,255,0.1)', color: 'white', fontSize: '11px' }} />
+              <Typography sx={{ color: 'white', fontSize: { xs: '10px', md: '12px' }, mb: 1 }}>GENRE</Typography>
+              <Box sx={{ display: 'flex', gap: 1, mb: { xs: 2, md: 4 } }}>
+                <Chip label="Family Drama" size="small" sx={{ backgroundColor: 'rgba(255,255,255,0.1)', color: 'white', fontSize: { xs: '10px', md: '11px' } }} />
               </Box>
             </Box>
 
             {/* Bottom Section - Trailer */}
-            <Box>
+            <Box sx={{ flex: { xs: 1, md: 'none' } }}>
               <Box
                 onClick={() => window.open('https://www.youtube.com/watch?v=bJl4i00eOas', '_blank')}
                 sx={{
                   position: 'relative',
                   width: '100%',
-                  height: '200px',
+                  height: { xs: '120px', md: '200px' },
                   backgroundColor: '#1a1a1a',
                   borderRadius: 1,
                   overflow: 'hidden',
@@ -289,8 +310,8 @@ function App() {
                     top: '50%',
                     left: '50%',
                     transform: 'translate(-50%, -50%)',
-                    width: '60px',
-                    height: '60px',
+                    width: { xs: '40px', md: '60px' },
+                    height: { xs: '40px', md: '60px' },
                     backgroundColor: 'rgba(255,255,255,0.9)',
                     borderRadius: '50%',
                     display: 'flex',
@@ -302,17 +323,17 @@ function App() {
                     }
                   }}
                 >
-                  <PlayArrow sx={{ fontSize: '30px', color: '#000', ml: '4px' }} />
+                  <PlayArrow sx={{ fontSize: { xs: '20px', md: '30px' }, color: '#000', ml: '4px' }} />
                 </Box>
 
                 {/* Watch Trailer Text */}
                 <Typography
                   sx={{
                     position: 'absolute',
-                    bottom: 16,
-                    left: 16,
+                    bottom: { xs: 8, md: 16 },
+                    left: { xs: 8, md: 16 },
                     color: 'white',
-                    fontSize: '14px',
+                    fontSize: { xs: '12px', md: '14px' },
                     fontWeight: 500,
                   }}
                 >
@@ -394,12 +415,12 @@ function App() {
               height: '100%',
               display: 'flex',
               flexDirection: 'column',
-              p: 4,
-              pt: '2vh', // Move content up by reducing top padding
+              p: { xs: 2, md: 4 },
+              pt: { xs: '5vh', md: '2vh' },
             }}
           >
             {/* Header */}
-            <Box sx={{ mb: 4 }}>
+            <Box sx={{ mb: { xs: 2, md: 4 } }}>
               <Typography
                 variant="h4"
                 sx={{
@@ -407,13 +428,21 @@ function App() {
                   fontWeight: 'bold',
                   mb: 2,
                   fontFamily: '"Bebas Neue", sans-serif',
+                  fontSize: { xs: '1.5rem', md: '2.125rem' },
                 }}
               >
                 Select Your Seats
               </Typography>
               
               {/* Movie Info Bar */}
-              <Box sx={{ display: 'flex', gap: 4, alignItems: 'center', mb: 3 }}>
+              <Box sx={{ 
+                display: 'flex', 
+                gap: { xs: 2, md: 4 }, 
+                alignItems: 'center', 
+                mb: 3,
+                flexDirection: { xs: 'column', sm: 'row' },
+                alignItems: { xs: 'flex-start', sm: 'center' }
+              }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <CalendarToday sx={{ color: '#00ff88', fontSize: '18px' }} />
                   <Typography sx={{ color: 'white', fontSize: '14px' }}>{selectedDate}</Typography>
@@ -430,7 +459,12 @@ function App() {
             </Box>
 
             {/* Main Content Area */}
-            <Box sx={{ flex: 1, display: 'flex', gap: 4 }}>
+            <Box sx={{ 
+              flex: 1, 
+              display: 'flex', 
+              gap: { xs: 2, md: 4 },
+              flexDirection: { xs: 'column', lg: 'row' }
+            }}>
               {/* Seat Selection Area */}
               <Box sx={{ flex: 1 }}>
                 {/* Screen */}
@@ -468,8 +502,8 @@ function App() {
                       <Box
                         onClick={() => !seat.occupied && handleSeatClick(seat.id)}
                         sx={{
-                          width: '24px',
-                          height: '24px',
+                          width: { xs: '16px', sm: '20px', md: '24px' },
+                          height: { xs: '16px', sm: '20px', md: '24px' },
                           backgroundColor,
                           border: '1px solid rgba(255,255,255,0.2)',
                           borderRadius: '4px',
@@ -477,7 +511,7 @@ function App() {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: '8px',
+                          fontSize: { xs: '6px', md: '8px' },
                           color: seat.selected ? 'black' : 'white',
                           '&:hover': seat.occupied ? {} : {
                             backgroundColor: seat.selected ? '#00ff88' : 'rgba(255,255,255,0.5)',
@@ -486,9 +520,9 @@ function App() {
                         }}
                       >
                         {seat.occupied ? (
-                          <EventSeat sx={{ fontSize: '12px', color: '#333' }} />
+                          <EventSeat sx={{ fontSize: { xs: '8px', md: '12px' }, color: '#333' }} />
                         ) : (
-                          seat.selected && <EventSeat sx={{ fontSize: '12px' }} />
+                          seat.selected && <EventSeat sx={{ fontSize: { xs: '8px', md: '12px' } }} />
                         )}
                       </Box>
                     </Grid>
@@ -498,7 +532,14 @@ function App() {
                 </Box>
 
                 {/* Legend */}
-                <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mb: 3 }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'center', 
+                  gap: { xs: 2, md: 3 }, 
+                  mb: 3,
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  alignItems: 'center'
+                }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box sx={{ width: '16px', height: '16px', backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: '2px' }} />
                     <Typography sx={{ color: 'white', fontSize: '12px' }}>Available</Typography>
@@ -517,12 +558,13 @@ function App() {
               {/* Booking Summary */}
               <Paper
                 sx={{
-                  width: '300px',
+                  width: { xs: '100%', lg: '300px' },
                   backgroundColor: 'rgba(0,20,20,0.9)',
                   color: 'white',
-                  p: 3,
+                  p: { xs: 2, md: 3 },
                   border: '1px solid rgba(255,255,255,0.1)',
-                  transform: 'translateY(-15%)',
+                  transform: { xs: 'none', lg: 'translateY(-15%)' },
+                  maxHeight: { xs: 'none', lg: 'fit-content' },
                 }}
               >
                 <Typography variant="h6" sx={{ mb: 2, color: '#00ff88' }}>
