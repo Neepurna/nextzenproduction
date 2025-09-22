@@ -7,7 +7,6 @@ import {
   Dialog, 
   DialogContent, 
   IconButton,
-  Grid,
   Paper,
   Divider
 } from '@mui/material';
@@ -32,6 +31,17 @@ function App() {
   const selectedTime = '7:30 PM';
   const selectedTheater = 'Galaxy Theater';
 
+  // Initialize fixed occupied seats - these won't change during the session
+  const [occupiedSeats] = useState(() => {
+    // For demo purposes, let's disable occupied seats for now as requested
+    // You can uncomment the lines below to enable occupied seats with fixed positions
+    return [];
+    
+    // Uncomment below to enable occupied seats:
+    // const occupied = ['A3', 'A4', 'B7', 'B8', 'C1', 'C14', 'D5', 'D10', 'E6', 'E9', 'F2', 'F13', 'G7', 'G8', 'H3', 'H12', 'I6', 'I9', 'J4', 'J11'];
+    // return occupied;
+  });
+
   const handleBuyTicket = () => {
     setDialogOpen(true);
   };
@@ -41,6 +51,11 @@ function App() {
   };
 
   const handleSeatClick = (seatId) => {
+    // Don't allow selection of occupied seats
+    if (occupiedSeats.includes(seatId)) {
+      return;
+    }
+    
     setSelectedSeats(prev => 
       prev.includes(seatId) 
         ? prev.filter(id => id !== seatId)
@@ -48,31 +63,27 @@ function App() {
     );
   };
 
-  // Generate seat grid (10 rows, 14 seats per row)
-  const generateSeats = () => {
-    const seats = [];
+  // Generate seat grid (10 rows, 14 seats per row) - memoized to prevent recreation
+  const seats = React.useMemo(() => {
+    const seatArray = [];
     const rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
     
     rows.forEach(row => {
       for (let i = 1; i <= 14; i++) {
         const seatId = `${row}${i}`;
-        const isOccupied = Math.random() < 0.3; // 30% chance of being occupied
-        const isSelected = selectedSeats.includes(seatId);
         
-        seats.push({
+        seatArray.push({
           id: seatId,
           row,
           number: i,
-          occupied: isOccupied,
-          selected: isSelected
+          occupied: occupiedSeats.includes(seatId),
+          selected: selectedSeats.includes(seatId)
         });
       }
     });
     
-    return seats;
-  };
-
-  const seats = generateSeats();
+    return seatArray;
+  }, [selectedSeats, occupiedSeats]);
   return (
     <Box
       sx={{
@@ -435,13 +446,12 @@ function App() {
               </Typography>
               
               {/* Movie Info Bar */}
-              <Box sx={{ 
+              <Box              sx={{ 
                 display: 'flex', 
                 gap: { xs: 2, md: 4 }, 
-                alignItems: 'center', 
+                alignItems: { xs: 'flex-start', sm: 'center' }, 
                 mb: 3,
-                flexDirection: { xs: 'column', sm: 'row' },
-                alignItems: { xs: 'flex-start', sm: 'center' }
+                flexDirection: { xs: 'column', sm: 'row' }
               }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <CalendarToday sx={{ color: '#00ff88', fontSize: '18px' }} />
@@ -486,49 +496,80 @@ function App() {
 
                 {/* Seat Grid */}
                 <Box sx={{ mb: 3 }}>
-                  <Grid container spacing={0.5} justifyContent="center">
-                    {seats.map((seat) => {
-                  let backgroundColor;
-                  if (seat.occupied) {
-                    backgroundColor = '#666';
-                  } else if (seat.selected) {
-                    backgroundColor = '#00ff88';
-                  } else {
-                    backgroundColor = 'rgba(255,255,255,0.3)';
-                  }
+                  {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].map((rowLetter) => (
+                    <Box key={rowLetter} sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'center', 
+                      gap: { xs: '2px', md: '4px' }, 
+                      mb: { xs: '2px', md: '4px' },
+                      alignItems: 'center'
+                    }}>
+                      {/* Row Label */}
+                      <Typography sx={{ 
+                        color: 'white', 
+                        fontSize: { xs: '10px', md: '12px' }, 
+                        width: '20px', 
+                        textAlign: 'center',
+                        mr: 1
+                      }}>
+                        {rowLetter}
+                      </Typography>
+                      
+                      {/* Seats in this row */}
+                      {seats.filter(seat => seat.row === rowLetter).map((seat) => {
+                        let backgroundColor;
+                        if (seat.occupied) {
+                          backgroundColor = '#666';
+                        } else if (seat.selected) {
+                          backgroundColor = '#00ff88';
+                        } else {
+                          backgroundColor = 'rgba(255,255,255,0.3)';
+                        }
 
-                  return (
-                    <Grid item key={seat.id}>
-                      <Box
-                        onClick={() => !seat.occupied && handleSeatClick(seat.id)}
-                        sx={{
-                          width: { xs: '16px', sm: '20px', md: '24px' },
-                          height: { xs: '16px', sm: '20px', md: '24px' },
-                          backgroundColor,
-                          border: '1px solid rgba(255,255,255,0.2)',
-                          borderRadius: '4px',
-                          cursor: seat.occupied ? 'not-allowed' : 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: { xs: '6px', md: '8px' },
-                          color: seat.selected ? 'black' : 'white',
-                          '&:hover': seat.occupied ? {} : {
-                            backgroundColor: seat.selected ? '#00ff88' : 'rgba(255,255,255,0.5)',
-                          },
-                          margin: seat.number === 7 || seat.number === 8 ? '0 8px 0 0' : '0',
-                        }}
-                      >
-                        {seat.occupied ? (
-                          <EventSeat sx={{ fontSize: { xs: '8px', md: '12px' }, color: '#333' }} />
-                        ) : (
-                          seat.selected && <EventSeat sx={{ fontSize: { xs: '8px', md: '12px' } }} />
-                        )}
-                      </Box>
-                    </Grid>
-                  );
-                })}
-                  </Grid>
+                        return (
+                          <Box
+                            key={seat.id}
+                            onClick={() => !seat.occupied && handleSeatClick(seat.id)}
+                            sx={{
+                              width: { xs: '16px', sm: '20px', md: '24px' },
+                              height: { xs: '16px', sm: '20px', md: '24px' },
+                              backgroundColor,
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              borderRadius: '4px',
+                              cursor: seat.occupied ? 'not-allowed' : 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: { xs: '6px', md: '8px' },
+                              color: seat.selected ? 'black' : 'white',
+                              '&:hover': seat.occupied ? {} : {
+                                backgroundColor: seat.selected ? '#00ff88' : 'rgba(255,255,255,0.5)',
+                              },
+                              // Add gap for aisle (between seats 7 and 8)
+                              marginRight: seat.number === 7 ? { xs: '8px', md: '12px' } : '0',
+                            }}
+                          >
+                            {seat.occupied ? (
+                              <EventSeat sx={{ fontSize: { xs: '8px', md: '12px' }, color: '#333' }} />
+                            ) : (
+                              seat.selected && <EventSeat sx={{ fontSize: { xs: '8px', md: '12px' } }} />
+                            )}
+                          </Box>
+                        );
+                      })}
+                      
+                      {/* Row Label on right side */}
+                      <Typography sx={{ 
+                        color: 'white', 
+                        fontSize: { xs: '10px', md: '12px' }, 
+                        width: '20px', 
+                        textAlign: 'center',
+                        ml: 1
+                      }}>
+                        {rowLetter}
+                      </Typography>
+                    </Box>
+                  ))}
                 </Box>
 
                 {/* Legend */}
