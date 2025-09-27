@@ -19,8 +19,8 @@ const supabaseUrl = 'https://gnjofqqwhvtkqdctwazt.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imduam9mcXF3aHZ0a3FkY3R3YXp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5NTE1MDQsImV4cCI6MjA3NDUyNzUwNH0.d2NiU_sF8L-G-GRQeMQfSzr6Ji8sErPK24HbAm-Qhqo';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Initialize Stripe
-const stripePromise = loadStripe('pk_live_51S9wWyCOzTrWTYck5cg1iBdadvgALpAZ8dgVVrL6mCSvVhYHuNRBO8qVS2NcEXoqSMb6i3NdVXcYKEZzveVMLI3e00jcQ3SNOs');
+// Initialize Stripe - Test key for development
+const stripePromise = loadStripe('pk_test_51S9wWyCOzTrWTYckDTAcJvKOjMrWyOAvCdRKX09nrcSID02RKalUnFYroWvZ5sixfxlywTopZ0cOjm8Z2aQEs94200WMRHafPZ');
 
 // Custom TikTok icon
 const TikTokIcon = () => (
@@ -101,23 +101,30 @@ function App() {
     if (selectedSeats.length === 0) return;
 
     setLoading(true);
+    
+    const requestData = {
+      selectedSeats: selectedSeats,
+      movieDetails: {
+        title: 'Janai Harayeko Manche',
+        date: selectedDate,
+        time: selectedTime,
+        theater: selectedTheater
+      }
+    };
+    
+    console.log('Sending request to create-checkout-session:', requestData);
+    
     try {
       // Call Supabase Edge Function to create checkout session
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: {
-          selectedSeats: selectedSeats,
-          movieDetails: {
-            title: 'Janai Harayeko Manche',
-            date: selectedDate,
-            time: selectedTime,
-            theater: selectedTheater
-          }
-        }
+        body: requestData
       });
+
+      console.log('Function response - data:', data, 'error:', error);
 
       if (error) {
         console.error('Error creating checkout session:', error);
-        alert('Failed to create checkout session. Please try again.');
+        alert(`Failed to create checkout session: ${error.message}`);
         return;
       }
 

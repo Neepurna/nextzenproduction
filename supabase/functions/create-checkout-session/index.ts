@@ -24,8 +24,24 @@ Deno.serve(async (req) => {
     })
   }
 
+  console.log('Function called, method:', req.method)
+  console.log('Environment check - STRIPE_SECRET_KEY exists:', !!Deno.env.get('STRIPE_SECRET_KEY'))
+  console.log('Environment check - SUPABASE_URL exists:', !!Deno.env.get('SUPABASE_URL'))
+
   try {
-    const { selectedSeats, movieDetails } = await req.json()
+    const body = await req.text()
+    console.log('Raw request body:', body)
+    
+    let requestData
+    try {
+      requestData = JSON.parse(body)
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError)
+      throw new Error('Invalid JSON in request body')
+    }
+    
+    const { selectedSeats, movieDetails } = requestData
+    console.log('Parsed data - selectedSeats:', selectedSeats, 'movieDetails:', movieDetails)
     
     if (!selectedSeats || selectedSeats.length === 0) {
       throw new Error('No seats selected')
@@ -48,12 +64,15 @@ Deno.serve(async (req) => {
     }]
 
     // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
+    console.log('Creating Stripe session with lineItems:', JSON.stringify(lineItems))
+    console.log('Origin header:', req.headers.get('origin'))
+    
+    const sessionConfig = {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
-      success_url: `${req.headers.get('origin')}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.headers.get('origin')}/`,
+      success_url: `${req.headers.get('origin') || 'http://localhost:5173'}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${req.headers.get('origin') || 'http://localhost:5173'}/`,
       metadata: {
         seats: selectedSeats.join(','),
         movie: movieDetails.title,
@@ -61,13 +80,24 @@ Deno.serve(async (req) => {
         time: movieDetails.time,
         theater: movieDetails.theater,
       },
-    })
+    }
+    
+    console.log('Session config:', JSON.stringify(sessionConfig))
+    
+    let session
+    try {
+      session = await stripe.checkout.sessions.create(sessionConfig)
+      console.log('Stripe session created successfully:', session.id)
+    } catch (stripeError) {
+      console.error('Stripe error:', stripeError)
+      throw new Error(`Stripe session creation failed: ${stripeError.message}`)
+    }
 
     // Update seat status to 'held' temporarily
     const { error: updateError } = await supabase
       .from('seats')
       .upsert(
-        selectedSeats.map(seatId => ({
+        selectedSeats.map((seatId: string) => ({
           id: seatId,
           status: 'held',
           stripe_session_id: session.id,
