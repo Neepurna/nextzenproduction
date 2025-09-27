@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Box, 
   Typography, 
@@ -11,6 +11,16 @@ import {
   Divider
 } from '@mui/material';
 import { PlayArrow, Close, CalendarToday, Schedule, LocationOn, EventSeat } from '@mui/icons-material';
+import { createClient } from '@supabase/supabase-js';
+import { loadStripe } from '@stripe/stripe-js';
+
+// Initialize Supabase client
+const supabaseUrl = 'https://gnjofqqwhvtkqdctwazt.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imduam9mcXF3aHZ0a3FkY3R3YXp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5NTE1MDQsImV4cCI6MjA3NDUyNzUwNH0.d2NiU_sF8L-G-GRQeMQfSzr6Ji8sErPK24HbAm-Qhqo';
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Initialize Stripe
+const stripePromise = loadStripe('pk_live_51S9wWyCOzTrWTYck5cg1iBdadvgALpAZ8dgVVrL6mCSvVhYHuNRBO8qVS2NcEXoqSMb6i3NdVXcYKEZzveVMLI3e00jcQ3SNOs');
 
 // Custom TikTok icon
 const TikTokIcon = () => (
@@ -27,27 +37,106 @@ const TikTokIcon = () => (
 function App() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSeats, setSelectedSeats] = useState([]);
+  const [occupiedSeats, setOccupiedSeats] = useState([]);
+  const [loading, setLoading] = useState(false);
   const selectedDate = 'Oct 15, 2024';
   const selectedTime = '7:30 PM';
   const selectedTheater = 'Galaxy Theater';
 
-  // Initialize fixed occupied seats - these won't change during the session
-  const [occupiedSeats] = useState(() => {
-    // For demo purposes, let's disable occupied seats for now as requested
-    // You can uncomment the lines below to enable occupied seats with fixed positions
-    return [];
-    
-    // Uncomment below to enable occupied seats:
-    // const occupied = ['A3', 'A4', 'B7', 'B8', 'C1', 'C14', 'D5', 'D10', 'E6', 'E9', 'F2', 'F13', 'G7', 'G8', 'H3', 'H12', 'I6', 'I9', 'J4', 'J11'];
-    // return occupied;
-  });
+  // Fetch occupied seats from Supabase
+  const fetchOccupiedSeats = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('seats')
+        .select('id')
+        .in('status', ['occupied', 'held']);
+      
+      if (error) {
+        console.error('Error fetching occupied seats:', error);
+        return;
+      }
+      
+      setOccupiedSeats(data.map(seat => seat.id));
+    } catch (error) {
+      console.error('Error fetching occupied seats:', error);
+    }
+  };
 
-  const handleBuyTicket = () => {
+  // Set up real-time subscription for seat changes
+  useEffect(() => {
+    if (!dialogOpen) return;
+
+    const channel = supabase
+      .channel('seats-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'seats'
+        },
+        (payload) => {
+          console.log('Seat change detected:', payload);
+          // Refetch occupied seats when any change occurs
+          fetchOccupiedSeats();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dialogOpen]);
+
+  const handleBuyTicket = async () => {
     setDialogOpen(true);
+    await fetchOccupiedSeats();
   };
 
   const handleCloseDialog = () => {
     setDialogOpen(false);
+  };
+
+  const handleCheckout = async () => {
+    if (selectedSeats.length === 0) return;
+
+    setLoading(true);
+    try {
+      // Call Supabase Edge Function to create checkout session
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: {
+          selectedSeats: selectedSeats,
+          movieDetails: {
+            title: 'Janai Harayeko Manche',
+            date: selectedDate,
+            time: selectedTime,
+            theater: selectedTheater
+          }
+        }
+      });
+
+      if (error) {
+        console.error('Error creating checkout session:', error);
+        alert('Failed to create checkout session. Please try again.');
+        return;
+      }
+
+      // Get Stripe instance and redirect to checkout
+      const stripe = await stripePromise;
+      const { error: stripeError } = await stripe.redirectToCheckout({
+        sessionId: data.sessionId
+      });
+
+      if (stripeError) {
+        console.error('Stripe redirect error:', stripeError);
+        alert('Failed to redirect to payment. Please try again.');
+      }
+    } catch (error) {
+      console.error('Checkout error:', error);
+      alert('An error occurred during checkout. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSeatClick = (seatId) => {
@@ -652,21 +741,22 @@ function App() {
                 
                 <Button
                   fullWidth
-                  disabled={selectedSeats.length === 0}
+                  disabled={selectedSeats.length === 0 || loading}
+                  onClick={handleCheckout}
                   sx={{
-                    backgroundColor: selectedSeats.length > 0 ? '#00ff88' : 'rgba(255,255,255,0.1)',
-                    color: selectedSeats.length > 0 ? 'black' : 'rgba(255,255,255,0.5)',
+                    backgroundColor: selectedSeats.length > 0 && !loading ? '#00ff88' : 'rgba(255,255,255,0.1)',
+                    color: selectedSeats.length > 0 && !loading ? 'black' : 'rgba(255,255,255,0.5)',
                     fontWeight: 'bold',
                     py: 1.5,
                     '&:hover': {
-                      backgroundColor: selectedSeats.length > 0 ? '#00dd77' : 'rgba(255,255,255,0.1)',
+                      backgroundColor: selectedSeats.length > 0 && !loading ? '#00dd77' : 'rgba(255,255,255,0.1)',
                     },
                     '&:disabled': {
                       color: 'rgba(255,255,255,0.3)',
                     }
                   }}
                 >
-                  Continue to Payment
+                  {loading ? 'Processing...' : 'Continue to Payment'}
                 </Button>
               </Paper>
             </Box>
