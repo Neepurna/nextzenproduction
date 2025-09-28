@@ -1,6 +1,16 @@
 // Manual ticket sending test function
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+
+// @ts-ignore - External module imports for Supabase Edge Functions
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+// Declare Deno global for TypeScript
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+  serve(handler: (req: Request) => Promise<Response>): void;
+};
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -245,7 +255,7 @@ async function sendTicketEmail(email: string, ticketHtml: string, bookingData: a
   return result
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   console.log('Manual ticket sender called')
   
   // Handle CORS
@@ -294,12 +304,12 @@ Deno.serve(async (req) => {
         } 
       },
     )
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending ticket:', error)
     return new Response(
       JSON.stringify({ 
-        error: error.message,
-        stack: error.stack
+        error: error?.message || 'Unknown error occurred',
+        stack: error?.stack
       }),
       { 
         status: 400,

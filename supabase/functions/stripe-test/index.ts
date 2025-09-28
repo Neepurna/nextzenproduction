@@ -1,10 +1,20 @@
 // Minimal Stripe test function
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+
+// @ts-ignore - External module imports for Supabase Edge Functions
 import Stripe from 'https://esm.sh/stripe@13.11.0'
+
+// Declare Deno global for TypeScript
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+  serve(handler: (req: Request) => Promise<Response>): void;
+};
 
 console.log("Stripe test function loaded")
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   console.log('Stripe test function called')
   
   // Handle CORS
@@ -66,12 +76,12 @@ Deno.serve(async (req) => {
         } 
       },
     )
-  } catch (error) {
+  } catch (error: any) {
     console.error('Stripe test error:', error)
     return new Response(
       JSON.stringify({ 
-        error: error.message,
-        stack: error.stack
+        error: error?.message || 'Unknown error occurred',
+        stack: error?.stack
       }),
       { 
         status: 400,

@@ -1,7 +1,18 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+
+// @ts-ignore - External module imports for Supabase Edge Functions
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// @ts-ignore - External module imports for Supabase Edge Functions
 import Stripe from 'https://esm.sh/stripe@13.11.0'
+
+// Declare Deno global for TypeScript
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+  serve(handler: (req: Request) => Promise<Response>): void;
+};
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
   apiVersion: '2023-10-16',
@@ -12,7 +23,7 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 console.log("Create checkout session function loaded")
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
@@ -25,6 +36,7 @@ Deno.serve(async (req) => {
   }
 
   console.log('Function called, method:', req.method)
+  console.log('Headers:', Object.fromEntries(req.headers.entries()))
   console.log('Environment check - STRIPE_SECRET_KEY exists:', !!Deno.env.get('STRIPE_SECRET_KEY'))
   console.log('Environment check - SUPABASE_URL exists:', !!Deno.env.get('SUPABASE_URL'))
 
@@ -71,6 +83,7 @@ Deno.serve(async (req) => {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
+      billing_address_collection: 'required',
       success_url: `${req.headers.get('origin') || 'http://localhost:5173'}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.headers.get('origin') || 'http://localhost:5173'}/`,
       metadata: {
@@ -88,9 +101,31 @@ Deno.serve(async (req) => {
     try {
       session = await stripe.checkout.sessions.create(sessionConfig)
       console.log('Stripe session created successfully:', session.id)
-    } catch (stripeError) {
+    
+    // Also trigger our webhook test function as a backup
+    try {
+      const webhookResponse = await fetch('https://gnjofqqwhvtkqdctwazt.supabase.co/functions/v1/webhook-test', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('MY_SUPABASE_ANON_KEY')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sessionId: session.id,
+          email: 'customer@example.com', // Default email for test
+          seats: selectedSeats.join(', ')
+        })
+      });
+      
+      const webhookResult = await webhookResponse.json();
+      console.log('Backup webhook triggered:', webhookResult);
+    } catch (webhookError) {
+      console.log('Backup webhook failed:', webhookError);
+    }
+    
+    } catch (stripeError: any) {
       console.error('Stripe error:', stripeError)
-      throw new Error(`Stripe session creation failed: ${stripeError.message}`)
+      throw new Error(`Stripe session creation failed: ${stripeError?.message || 'Unknown Stripe error'}`)
     }
 
     // Update seat status to 'held' temporarily
@@ -119,10 +154,10 @@ Deno.serve(async (req) => {
         } 
       },
     )
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating checkout session:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error?.message || 'Unknown error occurred' }),
       { 
         status: 400,
         headers: { 

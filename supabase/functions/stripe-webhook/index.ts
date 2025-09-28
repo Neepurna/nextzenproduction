@@ -1,7 +1,18 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+
+// @ts-ignore - External module imports for Supabase Edge Functions
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// @ts-ignore - External module imports for Supabase Edge Functions
 import Stripe from 'https://esm.sh/stripe@13.11.0'
+
+// Declare Deno global for TypeScript
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+  serve(handler: (req: Request) => Promise<Response>): void;
+};
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
   apiVersion: '2023-10-16',
@@ -179,7 +190,7 @@ async function sendTicketEmail(email: string, ticketHtml: string, bookingData: a
   return response.json()
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   const signature = req.headers.get('stripe-signature')
   
   if (!signature) {

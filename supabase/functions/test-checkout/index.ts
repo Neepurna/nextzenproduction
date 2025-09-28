@@ -1,9 +1,17 @@
 // Simple test function to isolate the issue
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
+// Declare Deno global for TypeScript
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+  serve(handler: (req: Request) => Promise<Response>): void;
+};
+
 console.log("Test checkout function loaded")
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   console.log('Test function called, method:', req.method)
   
   // Handle CORS
@@ -38,10 +46,10 @@ Deno.serve(async (req) => {
         } 
       },
     )
-  } catch (error) {
+  } catch (error: any) {
     console.error('Test function error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error?.message || 'Unknown error occurred' }),
       { 
         status: 400,
         headers: { 
