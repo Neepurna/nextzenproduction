@@ -11,7 +11,7 @@ declare const Deno: {
   env: {
     get(key: string): string | undefined;
   };
-  serve(handler: (req: Request) => Promise<Response>): void;
+  serve(handler: (req: Request) => Promise<Response>, options?: { onListen?: () => void }): void;
 };
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
@@ -22,11 +22,10 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const resendApiKey = Deno.env.get('RESEND_API_KEY')!
 
-console.log("Stripe webhook handler loaded")
+console.log("🚀 NO-AUTH Stripe webhook handler loaded")
 
 // Function to generate QR code URL
 function generateQRCode(bookingData: any) {
-  // Create user-friendly QR code text that shows "Valid Ticket" when scanned
   const qrText = `✅ VALID TICKET
 🎬 ${bookingData.movie}
 📅 ${bookingData.date} at ${bookingData.time}
@@ -152,7 +151,6 @@ async function generatePDFTicket(bookingData: any) {
     </html>
   `;
   
-  // For now, return the HTML - in production you'd convert to PDF
   return html;
 }
 
@@ -222,7 +220,6 @@ async function sendTicketEmail(email: string, ticketHtml: string, bookingData: a
   }
 
   console.log('📧 Sending email to Resend API...')
-  console.log('📧 Email data:', { ...emailData, html: '[HTML_CONTENT]' })
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -244,117 +241,179 @@ async function sendTicketEmail(email: string, ticketHtml: string, bookingData: a
   return result
 }
 
-Deno.serve(async (req: Request) => {
-  const signature = req.headers.get('stripe-signature')
+// CORS headers for preflight requests
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, stripe-signature',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+}
+
+// Main handler function
+async function handler(req: Request): Promise<Response> {
+  console.log(`🚀 NO-AUTH webhook received: ${req.method} ${req.url}`)
   
-  if (!signature) {
-    return new Response('No signature', { status: 400 })
+  // Handle preflight CORS requests
+  if (req.method === 'OPTIONS') {
+    console.log('🔄 Handling CORS preflight request')
+    return new Response('ok', { headers: corsHeaders })
   }
 
-  try {
-    const body = await req.text()
-    const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!
-    
-    // Verify webhook signature (async version for Edge Functions)
-    const event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret)
-    
-    console.log('Webhook event type:', event.type)
+  // Handle GET requests for testing
+  if (req.method === 'GET') {
+    console.log('✅ GET request - webhook is accessible')
+    return new Response('NO-AUTH Stripe webhook is running and accessible!', { 
+      headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
+      status: 200 
+    })
+  }
 
-    // Handle successful payment
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session
+  // Handle POST requests (actual webhooks)
+  if (req.method === 'POST') {
+    console.log('📨 POST request received')
+    
+    try {
+      const signature = req.headers.get('stripe-signature')
       
-      console.log('Payment successful for session:', session.id)
-      
-      // Create Supabase client
-      const supabase = createClient(supabaseUrl, supabaseServiceKey)
-      
-      // Get booking details from metadata
-      const bookingData = {
-        movie: session.metadata?.movie || 'Unknown Movie',
-        date: session.metadata?.date || 'Unknown Date',
-        time: session.metadata?.time || 'Unknown Time',
-        theater: session.metadata?.theater || 'Unknown Theater',
-        seats: session.metadata?.seats || 'Unknown Seats',
-        total: (session.amount_total || 0) / 100,
-        bookingId: session.id,
-        customerEmail: 'neepurna@gmail.com', // Force all emails to your address for testing
-        originalCustomerEmail: session.customer_details?.email || 'no-email@example.com' // Keep track of original customer email
-      }
-      
-      // Update seat status to 'occupied'
-      const seatIds = bookingData.seats.split(',')
-      const { error: updateError } = await supabase
-        .from('seats')
-        .update({ 
-          status: 'occupied',
-          stripe_session_id: session.id,
-          booking_id: crypto.randomUUID()
+      if (!signature) {
+        console.log('⚠️ No Stripe signature found - treating as test request')
+        const body = await req.text()
+        console.log('Test request body:', body)
+        
+        return new Response('Test webhook received successfully (no signature)', { 
+          headers: corsHeaders,
+          status: 200 
         })
-        .in('id', seatIds)
-      
-      if (updateError) {
-        console.error('Error updating seats:', updateError)
-      } else {
-        console.log('Successfully updated seats to occupied:', seatIds)
       }
+
+      const body = await req.text()
+      const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')
       
-      // Generate and send PDF ticket
+      if (!webhookSecret) {
+        console.error('❌ STRIPE_WEBHOOK_SECRET not configured')
+        return new Response('Webhook secret not configured', { 
+          headers: corsHeaders,
+          status: 500 
+        })
+      }
+
+      console.log('🔐 Verifying Stripe webhook signature...')
+      
+      // Verify webhook signature
+      let event: Stripe.Event
       try {
-        console.log('🎫 Starting ticket generation for:', bookingData)
-        const ticketHtml = await generatePDFTicket(bookingData)
-        console.log('🎫 Ticket HTML generated, length:', ticketHtml.length)
-        
-        console.log('📧 Starting email send process...')
-        const emailResult = await sendTicketEmail(bookingData.customerEmail, ticketHtml, bookingData)
-        console.log('✅ Email sent successfully:', emailResult)
-        
-        // Log success for debugging
-        console.log(`🎉 Ticket successfully sent to ${bookingData.customerEmail} for booking ${bookingData.bookingId}`)
-        
-      } catch (emailError: any) {
-        console.error('❌ CRITICAL ERROR sending ticket email:', emailError)
-        console.error('❌ Error details:', {
-          message: emailError?.message,
-          stack: emailError?.stack,
-          customerEmail: bookingData.customerEmail,
-          bookingId: bookingData.bookingId
+        event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret)
+        console.log('✅ Stripe signature verified successfully')
+      } catch (err) {
+        console.error('❌ Stripe signature verification failed:', err)
+        return new Response(`Webhook signature verification failed: ${err}`, { 
+          headers: corsHeaders,
+          status: 400 
         })
-        
-        // This is a critical failure - payment succeeded but user didn't get ticket
-        // You might want to store this for manual retry later
-        try {
-          const supabase = createClient(supabaseUrl, supabaseServiceKey)
-          await supabase.from('failed_email_logs').insert({
-            session_id: session.id,
-            customer_email: bookingData.customerEmail,
-            error_message: emailError?.message || 'Unknown error',
-            booking_data: bookingData,
-            created_at: new Date().toISOString()
-          })
-          console.log('📝 Failed email logged for manual retry')
-        } catch (logError) {
-          console.error('❌ Failed to log email failure:', logError)
-        }
       }
+      
+      console.log('📋 Webhook event type:', event.type)
+
+      // Handle successful payment
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object as Stripe.Checkout.Session
+        
+        console.log('💰 Payment successful for session:', session.id)
+        
+        // Create Supabase client
+        const supabase = createClient(supabaseUrl, supabaseServiceKey)
+        
+        // Get booking details from metadata
+        const bookingData = {
+          movie: session.metadata?.movie || 'Unknown Movie',
+          date: session.metadata?.date || 'Unknown Date',
+          time: session.metadata?.time || 'Unknown Time',
+          theater: session.metadata?.theater || 'Unknown Theater',
+          seats: session.metadata?.seats || 'Unknown Seats',
+          total: (session.amount_total || 0) / 100,
+          bookingId: session.id,
+          customerEmail: 'neepurna@gmail.com', // Force all emails to your address for testing
+          originalCustomerEmail: session.customer_details?.email || 'no-email@example.com'
+        }
+        
+        console.log('📋 Booking data:', bookingData)
+        
+        // Update seat status to 'occupied'
+        const seatIds = bookingData.seats.split(',')
+        const { error: updateError } = await supabase
+          .from('seats')
+          .update({ 
+            status: 'occupied',
+            stripe_session_id: session.id,
+            booking_id: crypto.randomUUID()
+          })
+          .in('id', seatIds)
+        
+        if (updateError) {
+          console.error('❌ Error updating seats:', updateError)
+        } else {
+          console.log('✅ Successfully updated seats to occupied:', seatIds)
+        }
+        
+        // Generate and send PDF ticket
+        try {
+          console.log('🎫 Starting ticket generation...')
+          const ticketHtml = await generatePDFTicket(bookingData)
+          console.log('🎫 Ticket HTML generated')
+          
+          console.log('📧 Starting email send process...')
+          const emailResult = await sendTicketEmail(bookingData.customerEmail, ticketHtml, bookingData)
+          console.log('✅ Email sent successfully:', emailResult)
+          
+          console.log(`🎉 COMPLETE SUCCESS: Ticket sent to ${bookingData.customerEmail}`)
+          
+        } catch (emailError: any) {
+          console.error('❌ CRITICAL ERROR sending ticket email:', emailError)
+          
+          // Log the failure for manual retry
+          try {
+            await supabase.from('failed_email_logs').insert({
+              session_id: session.id,
+              customer_email: bookingData.customerEmail,
+              error_message: emailError?.message || 'Unknown error',
+              booking_data: bookingData,
+              created_at: new Date().toISOString()
+            })
+            console.log('📝 Failed email logged for manual retry')
+          } catch (logError) {
+            console.error('❌ Failed to log email failure:', logError)
+          }
+          
+          // Return error response so Stripe will retry
+          return new Response(`Email sending failed: ${emailError?.message}`, { 
+            headers: corsHeaders,
+            status: 500 
+          })
+        }
+      } else {
+        console.log(`ℹ️ Unhandled event type: ${event.type}`)
+      }
+
+      return new Response('Webhook handled successfully', { 
+        headers: corsHeaders,
+        status: 200 
+      })
+      
+    } catch (error: any) {
+      console.error('❌ Webhook processing error:', error)
+      return new Response(`Webhook error: ${error?.message}`, { 
+        headers: corsHeaders,
+        status: 500 
+      })
     }
-
-    return new Response('Webhook handled successfully', { status: 200 })
-    
-  } catch (error) {
-    console.error('Webhook error:', error)
-    return new Response('Webhook error', { status: 400 })
   }
-})
 
-/* To invoke locally:
+  // Handle other methods
+  console.log(`❌ Method not allowed: ${req.method}`)
+  return new Response('Method not allowed', { 
+    headers: corsHeaders,
+    status: 405 
+  })
+}
 
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
-
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/stripe-webhook' \
-    --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' \
-    --header 'Content-Type: application/json' \
-    --data '{"name":"Functions"}'
-
-*/
+// Start the server
+Deno.serve(handler)
