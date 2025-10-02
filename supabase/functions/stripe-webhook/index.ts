@@ -278,7 +278,7 @@ Deno.serve(async (req: Request) => {
         seats: session.metadata?.seats || 'Unknown Seats',
         total: (session.amount_total || 0) / 100,
         bookingId: session.id,
-        customerEmail: 'neepurna@gmail.com', // Force all emails to your address for testing
+        customerEmail: session.customer_details?.email || 'neepurna@gmail.com', // Use actual customer email, fallback to your email
         originalCustomerEmail: session.customer_details?.email || 'no-email@example.com' // Keep track of original customer email
       }
       
@@ -306,11 +306,13 @@ Deno.serve(async (req: Request) => {
         console.log('🎫 Ticket HTML generated, length:', ticketHtml.length)
         
         console.log('📧 Starting email send process...')
-        const emailResult = await sendTicketEmail(bookingData.customerEmail, ticketHtml, bookingData)
-        console.log('✅ Email sent successfully:', emailResult)
+        // Temporarily disable email sending from webhook - let frontend EmailJS handle it
+        console.log('📧 Email sending disabled in webhook - EmailJS will handle emails from frontend')
+        // const emailResult = await sendTicketEmail(bookingData.customerEmail, ticketHtml, bookingData)
+        // console.log('✅ Email sent successfully:', emailResult)
         
         // Log success for debugging
-        console.log(`🎉 Ticket successfully sent to ${bookingData.customerEmail} for booking ${bookingData.bookingId}`)
+        console.log(`🎉 Ticket processing completed for booking ${bookingData.bookingId} - Email will be sent by frontend EmailJS`)
         
       } catch (emailError: any) {
         console.error('❌ CRITICAL ERROR sending ticket email:', emailError)

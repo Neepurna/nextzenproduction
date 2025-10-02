@@ -84,7 +84,7 @@ Deno.serve(async (req: Request) => {
       line_items: lineItems,
       mode: 'payment',
       billing_address_collection: 'required',
-      success_url: `${req.headers.get('origin') || 'http://localhost:5173'}/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${req.headers.get('origin') || 'http://localhost:5173'}/?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.headers.get('origin') || 'http://localhost:5173'}/`,
       metadata: {
         seats: selectedSeats.join(','),
@@ -101,28 +101,6 @@ Deno.serve(async (req: Request) => {
     try {
       session = await stripe.checkout.sessions.create(sessionConfig)
       console.log('Stripe session created successfully:', session.id)
-    
-    // Also trigger our webhook test function as a backup
-    try {
-      const webhookResponse = await fetch('https://gnjofqqwhvtkqdctwazt.supabase.co/functions/v1/webhook-test', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${Deno.env.get('MY_SUPABASE_ANON_KEY')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          sessionId: session.id,
-          email: 'customer@example.com', // Default email for test
-          seats: selectedSeats.join(', ')
-        })
-      });
-      
-      const webhookResult = await webhookResponse.json();
-      console.log('Backup webhook triggered:', webhookResult);
-    } catch (webhookError) {
-      console.log('Backup webhook failed:', webhookError);
-    }
-    
     } catch (stripeError: any) {
       console.error('Stripe error:', stripeError)
       throw new Error(`Stripe session creation failed: ${stripeError?.message || 'Unknown Stripe error'}`)

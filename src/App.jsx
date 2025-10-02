@@ -8,11 +8,16 @@ import {
   DialogContent, 
   IconButton,
   Paper,
-  Divider
+  Divider,
+  TextField,
+  DialogTitle
 } from '@mui/material';
 import { PlayArrow, Close, CalendarToday, Schedule, LocationOn, EventSeat } from '@mui/icons-material';
 import { createClient } from '@supabase/supabase-js';
 import { loadStripe } from '@stripe/stripe-js';
+import emailjs from '@emailjs/browser';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 // Initialize Supabase client
 const supabaseUrl = 'https://gnjofqqwhvtkqdctwazt.supabase.co';
@@ -39,9 +44,257 @@ function App() {
   const [selectedSeats, setSelectedSeats] = useState([]);
   const [occupiedSeats, setOccupiedSeats] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false);
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [purchasedSeats, setPurchasedSeats] = useState([]);
+  const [sessionId, setSessionId] = useState('');
   const selectedDate = 'Oct 15, 2024';
   const selectedTime = '7:30 PM';
   const selectedTheater = 'Galaxy Theater';
+
+  // Initialize EmailJS
+  useEffect(() => {
+    console.log('🔧 Initializing EmailJS...');
+    emailjs.init("FP5J_QH5IlVbKRRfv"); // Your actual public key
+    console.log('✅ EmailJS initialized with public key: FP5J_QH5IlVbKRRfv');
+  }, []);
+
+  // Check for successful payment on component mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    
+    if (sessionId) {
+      handlePaymentSuccess(sessionId);
+    }
+  }, []);
+
+  // Get customer email from Stripe session
+  const getCustomerEmailFromStripe = async (sessionId) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('get-session-details', {
+        body: { sessionId }
+      });
+      
+      if (data && data.customer_email) {
+        return data.customer_email;
+      }
+    } catch (error) {
+      console.error('Error getting customer email:', error);
+    }
+    return null;
+  };
+
+  // Handle successful payment
+  const handlePaymentSuccess = async (sessionId) => {
+    try {
+      // Get session details and update seat status
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('seats')
+        .select('*')
+        .eq('stripe_session_id', sessionId);
+
+      if (sessionError) {
+        console.error('Error fetching session data:', sessionError);
+        return;
+      }
+
+      if (sessionData && sessionData.length > 0) {
+        const seats = sessionData.map(seat => seat.id);
+        setPurchasedSeats(seats);
+        setSessionId(sessionId);
+        
+        // Update seats to occupied status
+        const { error: updateError } = await supabase
+          .from('seats')
+          .update({ status: 'occupied' })
+          .eq('stripe_session_id', sessionId);
+
+        if (updateError) {
+          console.error('Error updating seat status:', updateError);
+        }
+
+        // Get customer email from Stripe and send confirmation
+        const email = await getCustomerEmailFromStripe(sessionId);
+        console.log('🔍 Retrieved email from Stripe:', email);
+        
+        if (email) {
+          setCustomerEmail(email);
+          console.log('📧 Sending email via EmailJS to:', email);
+          await sendTicketEmail(email, seats);
+        } else {
+          console.log('⚠️ No email retrieved from Stripe, will require manual input');
+          // Fallback: show email input if we can't get email from Stripe
+          setCustomerEmail('');
+        }
+        
+        // Show confirmation dialog
+        setConfirmationDialogOpen(true);
+      }
+      
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (error) {
+      console.error('Error handling payment success:', error);
+    }
+  };
+
+  // Test email function directly
+  const testEmailFunction = async () => {
+    const testEmail = 'shibakriwo@gmail.com'; // Use your email for testing
+    console.log('🧪 Testing email function with:', testEmail);
+    console.log('🔍 Expected recipient should be:', testEmail);
+    console.log('🔍 If email goes to neepurna@gmail.com, template settings are wrong');
+    
+    try {
+      const templateParams = {
+        email: testEmail, // Changed from to_email to email
+        to_email: testEmail, // Keep both for compatibility
+        movie_title: 'Janai Harayeko Manche',
+        show_date: selectedDate,
+        show_time: selectedTime,
+        theater_name: selectedTheater,
+        seat_numbers: 'A3',
+        ticket_count: 1,
+        total_amount: '$15.00'
+      };
+
+      console.log('🧪 Test template params:', templateParams);
+      console.log('🔧 Using service ID: service_3898n7y');
+      console.log('🔧 Using template ID: template_bk2ftqf');
+      console.log('🔧 Using public key: FP5J_QH5IlVbKRRfv');
+      console.log('⚠️ IMPORTANT: Check your EmailJS template settings - the To Email field must be {{to_email}}');
+
+      const result = await emailjs.send(
+        'service_3898n7y',
+        'template_bk2ftqf',
+        templateParams,
+        'FP5J_QH5IlVbKRRfv'
+      );
+
+      console.log('✅ Test email result:', result);
+      alert('Email API call successful! If email went to wrong address, check template settings.');
+    } catch (error) {
+      console.error('❌ Test email error:', error);
+      console.error('❌ Error details:', error.status, error.text);
+      alert(`Test email failed: ${error.status} - ${error.text}`);
+    }
+  };
+
+  // Send ticket via email automatically
+  const sendTicketEmail = async (email, seats) => {
+    try {
+      console.log('📧 Sending email to:', email);
+      
+      const templateParams = {
+        email: email, // Changed from to_email to email - this controls recipient
+        to_email: email, // Keep both for compatibility
+        movie_title: 'Janai Harayeko Manche',
+        show_date: selectedDate,
+        show_time: selectedTime,
+        theater_name: selectedTheater,
+        seat_numbers: seats.join(', '),
+        ticket_count: seats.length,
+        total_amount: `$${(seats.length * 15).toFixed(2)}`
+      };
+
+      console.log('📋 Template params:', templateParams);
+
+      await emailjs.send(
+        'service_3898n7y',
+        'template_bk2ftqf',
+        templateParams,
+        'FP5J_QH5IlVbKRRfv'
+      );
+
+      console.log('✅ Ticket email sent successfully to:', email);
+    } catch (error) {
+      console.error('❌ Error sending email:', error);
+    }
+  };
+
+  // Generate and download PDF ticket
+  const downloadTicketPDF = async () => {
+    try {
+      setLoading(true);
+      
+      // Create a temporary div with ticket content
+      const ticketElement = document.createElement('div');
+      ticketElement.innerHTML = `
+        <div style="
+          font-family: Arial, sans-serif;
+          max-width: 600px;
+          margin: 20px auto;
+          padding: 30px;
+          border: 2px solid #458500;
+          border-radius: 10px;
+          background-color: white;
+        ">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #458500; margin: 0;">🎬 MOVIE TICKET</h1>
+            <h2 style="color: #333; margin: 10px 0;">Next Zen Production</h2>
+          </div>
+          
+          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h2 style="color: #458500; margin-top: 0;">Janai Harayeko Manche</h2>
+            <div style="font-size: 16px; line-height: 1.6;">
+              <p><strong>📅 Date:</strong> ${selectedDate}</p>
+              <p><strong>🕒 Time:</strong> ${selectedTime}</p>
+              <p><strong>🏛️ Theater:</strong> ${selectedTheater}</p>
+              <p><strong>🎫 Seats:</strong> ${purchasedSeats.join(', ')}</p>
+              <p><strong>🎟️ Tickets:</strong> ${purchasedSeats.length}</p>
+              <p><strong>💰 Total:</strong> $${(purchasedSeats.length * 15).toFixed(2)}</p>
+            </div>
+          </div>
+          
+          <div style="background-color: #458500; color: white; padding: 15px; border-radius: 8px; text-align: center;">
+            <p style="margin: 0; font-weight: bold;">Session ID: ${sessionId}</p>
+          </div>
+          
+          <div style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border-radius: 8px;">
+            <h3 style="color: #856404; margin-top: 0;">Important Information:</h3>
+            <ul style="color: #856404; margin: 0;">
+              <li>Please arrive 15 minutes before showtime</li>
+              <li>Present this ticket at the entrance</li>
+              <li>Seats are reserved</li>
+              <li>Outside food not permitted</li>
+            </ul>
+          </div>
+        </div>
+      `;
+      
+      // Temporarily add to DOM for rendering
+      ticketElement.style.position = 'absolute';
+      ticketElement.style.left = '-9999px';
+      document.body.appendChild(ticketElement);
+      
+      // Generate canvas from HTML
+      const canvas = await html2canvas(ticketElement, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff'
+      });
+      
+      // Remove temporary element
+      document.body.removeChild(ticketElement);
+      
+      // Create PDF
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgData = canvas.toDataURL('image/png');
+      
+      const imgWidth = 190;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+      pdf.save(`Movie-Ticket-${sessionId}.pdf`);
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch occupied seats from Supabase
   const fetchOccupiedSeats = async () => {
@@ -766,6 +1019,121 @@ function App() {
                   {loading ? 'Processing...' : 'Continue to Payment'}
                 </Button>
               </Paper>
+            </Box>
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation Dialog for Ticket Delivery */}
+      <Dialog 
+        open={confirmationDialogOpen} 
+        onClose={() => setConfirmationDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ color: '#2e7d32', fontWeight: 'bold' }}>
+          ✅ Payment Successful!
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Typography variant="body1" sx={{ mb: 2, color: '#555' }}>
+              Your tickets have been confirmed and sent to your email address.
+            </Typography>
+            
+            <Box sx={{ 
+              p: 2, 
+              backgroundColor: '#f5f5f5', 
+              borderRadius: 2, 
+              mb: 3,
+              border: '1px solid #e0e0e0'
+            }}>
+              <Typography variant="h6" sx={{ mb: 1, color: '#333' }}>
+                Janai Harayeko Manche
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
+                📅 {selectedDate} at {selectedTime}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
+                🏛️ {selectedTheater}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
+                🎫 Seats: {purchasedSeats.join(', ')}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
+                💰 Total: ${(purchasedSeats.length * 15).toFixed(2)}
+              </Typography>
+              {customerEmail && (
+                <Typography variant="body2" sx={{ color: '#666' }}>
+                  📧 Email sent to: {customerEmail}
+                </Typography>
+              )}
+            </Box>
+
+            <Box sx={{ 
+              p: 2, 
+              backgroundColor: '#e8f5e8', 
+              borderRadius: 2, 
+              mb: 3,
+              border: '1px solid #4caf50'
+            }}>
+              {customerEmail ? (
+                <>
+                  <Typography variant="body2" sx={{ color: '#2e7d32', mb: 1 }}>
+                    ✅ Ticket confirmation sent to your email
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#2e7d32' }}>
+                    📱 You can also download a PDF copy below
+                  </Typography>
+                </>
+              ) : (
+                <>
+                  <Typography variant="body2" sx={{ color: '#f57c00', mb: 1 }}>
+                    ⚠️ Email not retrieved automatically
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    label="Enter your email to receive tickets"
+                    type="email"
+                    value={customerEmail}
+                    onChange={(e) => setCustomerEmail(e.target.value)}
+                    variant="outlined"
+                    size="small"
+                    sx={{ mt: 1 }}
+                  />
+                </>
+              )}
+            </Box>
+
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                variant="outlined"
+                onClick={() => setConfirmationDialogOpen(false)}
+                sx={{ flex: 1 }}
+              >
+                Close
+              </Button>
+              {!customerEmail && (
+                <Button
+                  variant="outlined"
+                  onClick={() => sendTicketEmail(customerEmail, purchasedSeats)}
+                  disabled={loading || !customerEmail}
+                  sx={{ flex: 1 }}
+                >
+                  {loading ? 'Sending...' : '📧 Send Email'}
+                </Button>
+              )}
+              <Button
+                variant="contained"
+                onClick={downloadTicketPDF}
+                disabled={loading}
+                sx={{ 
+                  flex: 1,
+                  backgroundColor: '#2e7d32',
+                  '&:hover': { backgroundColor: '#1b5e20' }
+                }}
+              >
+                {loading ? 'Generating...' : '📄 Download PDF'}
+              </Button>
             </Box>
           </Box>
         </DialogContent>
