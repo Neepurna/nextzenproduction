@@ -101,13 +101,17 @@ Deno.serve(async (req: Request) => {
     try {
       session = await stripe.checkout.sessions.create(sessionConfig)
       console.log('Stripe session created successfully:', session.id)
+      console.log('Stripe session URL:', session.url)
     } catch (stripeError: any) {
       console.error('Stripe error:', stripeError)
       throw new Error(`Stripe session creation failed: ${stripeError?.message || 'Unknown Stripe error'}`)
     }
 
     return new Response(
-      JSON.stringify({ sessionId: session.id }),
+      JSON.stringify({ 
+        sessionId: session.id,
+        url: session.url 
+      }),
       { 
         headers: { 
           'Content-Type': 'application/json',

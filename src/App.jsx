@@ -301,15 +301,25 @@ function App() {
         return;
       }
 
-      // Get Stripe instance and redirect to checkout
-      const stripe = await stripePromise;
-      const { error: stripeError } = await stripe.redirectToCheckout({
-        sessionId: data.sessionId
-      });
+      console.log('✅ Got session ID:', data.sessionId);
+      console.log('✅ Got checkout URL:', data.url);
 
-      if (stripeError) {
-        console.error('Stripe redirect error:', stripeError);
-        alert('Failed to redirect to payment. Please try again.');
+      // For mobile compatibility, redirect directly to the URL if available
+      if (data.url) {
+        console.log('🔀 Redirecting to Stripe checkout URL directly (mobile-friendly)');
+        window.location.href = data.url;
+      } else {
+        // Fallback to Stripe.js redirect method
+        console.log('🔀 Using Stripe.js redirectToCheckout (fallback)');
+        const stripe = await stripePromise;
+        const { error: stripeError } = await stripe.redirectToCheckout({
+          sessionId: data.sessionId
+        });
+
+        if (stripeError) {
+          console.error('Stripe redirect error:', stripeError);
+          alert('Failed to redirect to payment. Please try again.');
+        }
       }
     } catch (error) {
       console.error('Checkout error:', error);
